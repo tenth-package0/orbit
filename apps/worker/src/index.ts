@@ -92,9 +92,10 @@ export default {
 
       return new Response(stream.readable, { headers: { ...corsHeaders, "content-type": "text/event-stream", "cache-control": "no-store", "x-request-id": requestId } });
     } catch (error) {
-      const code = error instanceof Error && ["UNAUTHENTICATED", "FORBIDDEN"].includes(error.message) ? error.message as "UNAUTHENTICATED" | "FORBIDDEN" : "INTERNAL_ERROR";
+      const expected = error instanceof Error && ["UNAUTHENTICATED", "FORBIDDEN", "PAYLOAD_TOO_LARGE"].includes(error.message) ? error.message : undefined;
+      const code = (expected ?? "INTERNAL_ERROR") as "UNAUTHENTICATED" | "FORBIDDEN" | "PAYLOAD_TOO_LARGE" | "INTERNAL_ERROR";
       console.error(JSON.stringify({ requestId, outcome: "error", code }));
-      return json({ error: publicError(code, requestId) }, code === "UNAUTHENTICATED" ? 401 : code === "FORBIDDEN" ? 403 : 500, corsHeaders);
+      return json({ error: publicError(code, requestId) }, code === "UNAUTHENTICATED" ? 401 : code === "FORBIDDEN" ? 403 : code === "PAYLOAD_TOO_LARGE" ? 413 : 500, corsHeaders);
     }
   }
 };

@@ -5,6 +5,15 @@ export type FinishReason = "stop" | "length" | "content_filter" | "cancelled" | 
 export type ChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
+  attachments?: ChatAttachment[];
+};
+
+export type ChatAttachment = {
+  id: string;
+  fileName: string;
+  mimeType: "image/png" | "image/jpeg" | "image/webp" | "application/pdf" | "text/plain";
+  sizeBytes: number;
+  data: string;
 };
 
 export type ModelDefinition = {

@@ -4,6 +4,11 @@ import { geminiAdapter } from "../src/providers/gemini";
 import { openaiAdapter } from "../src/providers/openai";
 
 const request = { model: "test", messages: [{ role: "user" as const, content: "Hello" }], maxOutputTokens: 100, signal: new AbortController().signal };
+const multimodalRequest = { ...request, messages: [{ role: "user" as const, content: "Describe these", attachments: [
+  { id: "image", fileName: "screen.png", mimeType: "image/png" as const, sizeBytes: 3, data: "aW1n" },
+  { id: "pdf", fileName: "notes.pdf", mimeType: "application/pdf" as const, sizeBytes: 3, data: "cGRm" },
+  { id: "text", fileName: "notes.txt", mimeType: "text/plain" as const, sizeBytes: 5, data: "aGVsbG8=" }
+] }] };
 const response = (frames: string[]) => new Response(frames.map((data) => `data: ${data}\n\n`).join(""), { status: 200, headers: { "content-type": "text/event-stream" } });
 async function collect(adapter: typeof openaiAdapter) { const events = []; for await (const event of adapter.stream(request, "secret")) events.push(event); return events; }
 
@@ -31,5 +36,20 @@ describe("provider stream normalization", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response([JSON.stringify({ candidates: [{ content: { parts: [{ text: "Hi" }] }, finishReason: "STOP" }], usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 1 } })])));
     expect(await collect(geminiAdapter)).toEqual([{ type: "text_delta", text: "Hi" }, { type: "usage", inputTokens: 2, outputTokens: 1 }, { type: "complete", finishReason: "stop" }]);
   });
-});
 
+  it.each([
+    ["OpenAI", openaiAdapter, ["input_image", "input_file", "hello"]],
+    ["Anthropic", anthropicAdapter, ["image", "document", "hello"]],
+    ["Gemini", geminiAdapter, ["inlineData", "application/pdf", "hello"]]
+  ])("sends attachments in the %s native format", async (_name, adapter, expected) => {
+    const fetchMock = vi.fn().mockResolvedValue(response(adapter === geminiAdapter
+      ? [JSON.stringify({ candidates: [{ content: { parts: [{ text: "ok" }] }, finishReason: "STOP" }] })]
+      : adapter === anthropicAdapter
+        ? [JSON.stringify({ type: "message_delta", delta: { stop_reason: "end_turn" }, usage: {} })]
+        : [JSON.stringify({ type: "response.completed", response: {} })]));
+    vi.stubGlobal("fetch", fetchMock);
+    for await (const _event of adapter.stream(multimodalRequest, "secret")) { /* consume */ }
+    const body = String(fetchMock.mock.calls[0]![1]!.body);
+    for (const marker of expected) expect(body).toContain(marker);
+  });
+});

@@ -4,7 +4,15 @@ import { parseSse, type ProviderAdapter } from "./provider";
 export const geminiAdapter: ProviderAdapter = {
   async *stream(request, apiKey) {
     const system = request.messages.filter((m) => m.role === "system").map((m) => ({ text: m.content }));
-    const contents = request.messages.filter((m) => m.role !== "system").map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] }));
+    const contents = request.messages.filter((m) => m.role !== "system").map((message) => ({
+      role: message.role === "assistant" ? "model" : "user",
+      parts: [
+        ...(message.attachments ?? []).map((attachment) => attachment.mimeType === "text/plain"
+          ? { text: `<attachment name="${attachment.fileName}">\n${decodeBase64Text(attachment.data)}\n</attachment>` }
+          : { inlineData: { mimeType: attachment.mimeType, data: attachment.data } }),
+        { text: message.content }
+      ]
+    }));
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(request.model)}:streamGenerateContent?alt=sse`;
     const response = await fetch(url, {
       method: "POST",
@@ -22,3 +30,4 @@ export const geminiAdapter: ProviderAdapter = {
   }
 };
 
+function decodeBase64Text(data: string) { return new TextDecoder().decode(Uint8Array.from(atob(data), (character) => character.charCodeAt(0))); }
