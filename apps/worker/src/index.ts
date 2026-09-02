@@ -85,6 +85,7 @@ export default {
           }
         } catch (error) {
           const code = error instanceof ProviderHttpError && error.status === 429 ? "PROVIDER_RATE_LIMITED" : error instanceof DOMException && error.name === "AbortError" ? "CANCELLED" : "PROVIDER_UNAVAILABLE";
+          console.error(JSON.stringify({ requestId, provider: model.provider, outcome: "provider_error", status: error instanceof ProviderHttpError ? error.status : undefined, code }));
           await writer.write(sse({ type: "error", generationId, error: publicError(code, requestId, code !== "CANCELLED") }));
         }
       })).finally(() => writer.close());
