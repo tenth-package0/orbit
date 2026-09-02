@@ -33,7 +33,7 @@ async function rateLimit(env: Env, userId: string, ip: string, units: number) {
 }
 
 function providerKey(env: Env, provider: string) {
-  return provider === "openai" ? env.OPENAI_API_KEY : provider === "anthropic" ? env.ANTHROPIC_API_KEY : env.GEMINI_API_KEY;
+  return provider === "openai" ? env.OPENAI_API_KEY : provider === "anthropic" ? env.ANTHROPIC_API_KEY : env.GOOGLE_API_KEY;
 }
 
 export default {

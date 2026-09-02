@@ -75,7 +75,7 @@ pnpm exec wrangler secret put SUPABASE_URL
 pnpm exec wrangler secret put SUPABASE_PUBLISHABLE_KEY
 pnpm exec wrangler secret put OPENAI_API_KEY
 pnpm exec wrangler secret put ANTHROPIC_API_KEY
-pnpm exec wrangler secret put GEMINI_API_KEY
+pnpm exec wrangler secret put GOOGLE_API_KEY
 pnpm exec wrangler secret put ALLOWED_ORIGINS
 ```
 
