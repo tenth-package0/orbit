@@ -41,6 +41,7 @@ The snapshot is updated through a reviewed code change, not runtime scraping. Se
 ## Security model
 
 - Provider keys are Cloudflare Secrets.
+- The Gemini API key may be bound to a dedicated Google service account when required by Google Cloud policy; the account needs no broad project role.
 - Model IDs and provider URLs are server-owned allowlists.
 - Supabase JWTs are verified against project JWKS with issuer and audience checks.
 - Database writes use the caller's token and remain subject to RLS.
@@ -114,4 +115,3 @@ Adding a provider is intentionally not a plug-in system. Add one adapter impleme
 ## Deliberate v1 exclusions
 
 Orbit does not use AI Gateway, Durable Objects, queues, RAG, vector databases, billing, runtime benchmark scraping, LLM-based routing, silent retries, response caching, microservices, or repository/service layers.
-
