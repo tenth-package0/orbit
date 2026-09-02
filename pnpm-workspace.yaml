@@ -3,6 +3,7 @@ packages:
   - packages/*
 allowBuilds:
   esbuild: true
+  unrs-resolver: true
   workerd: true
 minimumReleaseAgeExclude:
   - '@cloudflare/workers-types@5.20260901.1'
