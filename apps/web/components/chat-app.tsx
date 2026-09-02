@@ -21,13 +21,24 @@ export function ChatApp({ email }: { email: string }) {
   const supabase = createClient();
   const [conversations, setConversations] = useState<Conversation[]>([]), [conversationId, setConversationId] = useState<string>(), [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState(""), [selection, setSelection] = useState("auto"), [running, setRunning] = useState(false), [error, setError] = useState(""), [sidebarOpen, setSidebarOpen] = useState(false);
-  const aborter = useRef<AbortController | undefined>(undefined), messagesEnd = useRef<HTMLDivElement>(null);
+  const aborter = useRef<AbortController | undefined>(undefined), messagesPane = useRef<HTMLDivElement>(null), composerInput = useRef<HTMLTextAreaElement>(null), nearBottom = useRef(true);
 
   useEffect(() => { void refreshConversations(); }, []);
-  useEffect(() => { messagesEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages]);
+  useEffect(() => {
+    const textarea = composerInput.current;
+    if (!textarea) return;
+    textarea.style.height = "0px";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
+  }, [draft]);
+  useEffect(() => {
+    const pane = messagesPane.current;
+    if (!pane || !nearBottom.current) return;
+    requestAnimationFrame(() => pane.scrollTo({ top: pane.scrollHeight, behavior: running ? "auto" : "smooth" }));
+  }, [messages, running]);
+  function trackScroll() { const pane = messagesPane.current; if (pane) nearBottom.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 120; }
   async function refreshConversations() { const { data } = await supabase.from("conversations").select("id,title").order("updated_at", { ascending: false }); setConversations(data ?? []); }
-  async function openConversation(id: string) { setConversationId(id); setSidebarOpen(false); const { data } = await supabase.from("messages").select("*").eq("conversation_id", id).order("created_at"); setMessages(data ?? []); }
-  async function createConversation() { const { data: { user } } = await supabase.auth.getUser(); if (!user) return; const { data } = await supabase.from("conversations").insert({ user_id: user.id }).select("id,title").single(); if (data) { setConversations((old) => [data, ...old]); setConversationId(data.id); setMessages([]); setSidebarOpen(false); } }
+  async function openConversation(id: string) { nearBottom.current = true; setConversationId(id); setSidebarOpen(false); const { data } = await supabase.from("messages").select("*").eq("conversation_id", id).order("created_at"); setMessages(data ?? []); }
+  async function createConversation() { const { data: { user } } = await supabase.auth.getUser(); if (!user) return; const { data } = await supabase.from("conversations").insert({ user_id: user.id }).select("id,title").single(); if (data) { nearBottom.current = true; setConversations((old) => [data, ...old]); setConversationId(data.id); setMessages([]); setSidebarOpen(false); } }
   async function removeConversation(id: string) { await supabase.from("conversations").delete().eq("id", id); if (conversationId === id) { setConversationId(undefined); setMessages([]); } await refreshConversations(); }
 
   async function generate(activeId: string, userMessageId: string, chosen: string) {
@@ -48,7 +59,7 @@ export function ChatApp({ email }: { email: string }) {
   }
 
   async function send() {
-    if (!draft.trim() || running) return; let activeId = conversationId; const text = draft.trim(); setDraft("");
+    if (!draft.trim() || running) return; nearBottom.current = true; let activeId = conversationId; const text = draft.trim(); setDraft("");
     if (!activeId) { const { data: { user } } = await supabase.auth.getUser(); if (!user) return; const { data } = await supabase.from("conversations").insert({ user_id: user.id, title: text.slice(0, 72) }).select("id,title").single(); if (!data) return; activeId = data.id; setConversationId(activeId); setConversations((old) => [data, ...old]); }
     const { data: userMessage, error: insertError } = await supabase.from("messages").insert({ conversation_id: activeId, role: "user", content: text }).select("id,role,content").single();
     if (insertError || !userMessage) { setError(insertError?.message ?? "Could not save message"); return; } setMessages((old) => [...old, userMessage]); await generate(activeId!, userMessage.id, selection);
@@ -58,8 +69,8 @@ export function ChatApp({ email }: { email: string }) {
   return <main className="shell"><div className={`mobile-shade ${sidebarOpen ? "show" : ""}`} onClick={() => setSidebarOpen(false)}/>
     <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}><div className="brand"><Image src="/orbit-logo.png" alt="Orbit" width={31} height={31}/><span>Orbit</span><button className="sidebar-close" onClick={() => setSidebarOpen(false)}><X size={18}/></button></div><button className="new-chat" onClick={createConversation}><MessageSquarePlus size={17}/>New conversation</button><div className="history-label">Recent</div><div className="conversation-list">{conversations.map((conversation) => <div className="conversation-row" key={conversation.id}><button className={`conversation ${conversation.id === conversationId ? "active" : ""}`} onClick={() => openConversation(conversation.id)}>{conversation.title}</button><button aria-label="Delete conversation" className="delete-chat" onClick={() => removeConversation(conversation.id)}><Trash2 size={14}/></button></div>)}</div><div className="sidebar-bottom"><span>{email}</span><button className="icon-button" aria-label="Sign out" onClick={async () => { await supabase.auth.signOut(); location.href = "/sign-in"; }}><LogOut size={16}/></button></div></aside>
     <section className="main"><header className="topbar"><button className="mobile-menu" onClick={() => setSidebarOpen(true)}><Menu size={19}/></button><div className="model-tabs"><button className={`model-tab auto ${selection === "auto" ? "selected" : ""}`} onClick={() => setSelection("auto")}><Sparkles size={14}/>Auto</button>{models.map((model) => <button key={model.key} className={`model-tab ${selection === model.key ? "selected" : ""}`} onClick={() => setSelection(model.key)}><i style={{background:model.color}}/>{model.short}</button>)}<button className={`model-tab ${selection === "compare" ? "selected" : ""}`} onClick={() => setSelection("compare")}>Compare</button></div><span className="mode-note">{selection === "auto" ? "Routes every prompt" : selection === "compare" ? "3 models · 3 calls" : "Context retained"}</span></header>
-      <div className="messages">{messages.length === 0 ? <Welcome selection={selection} onSelect={setSelection}/> : renderMessages(messages, running, secondPass)}<div ref={messagesEnd}/></div>
-      <footer className="composer-wrap"><div className="composer"><textarea aria-label="Message" rows={1} placeholder={selection === "compare" ? "Ask all three models…" : "Message Orbit…"} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }}/><button className="send" aria-label={running ? "Stop" : "Send"} disabled={!draft.trim() && !running} onClick={() => running ? aborter.current?.abort() : void send()}>{running ? <X size={18}/> : <Send size={18}/>}</button></div><div className="composer-foot"><span>{selection === "auto" ? "Auto chooses by capability · full thread context follows" : `${modelName(selection)} selected · switch anytime`}</span><span>Enter to send</span></div>{error && <div className="error"><span>{error}</span><button onClick={() => setError("")}>Dismiss</button></div>}</footer></section>
+      <div className="messages" ref={messagesPane} onScroll={trackScroll}>{messages.length === 0 ? <Welcome selection={selection} onSelect={setSelection}/> : <>{renderMessages(messages, running, secondPass)}<div className="chat-end-spacer" aria-hidden="true"/></>}</div>
+      <footer className="composer-wrap"><div className="composer"><textarea ref={composerInput} aria-label="Message" rows={1} placeholder={selection === "compare" ? "Ask all three models…" : "Message Orbit…"} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }}/><button className="send" aria-label={running ? "Stop" : "Send"} disabled={!draft.trim() && !running} onClick={() => running ? aborter.current?.abort() : void send()}>{running ? <X size={18}/> : <Send size={18}/>}</button></div><div className="composer-foot"><span>{selection === "auto" ? "Auto chooses by capability · full thread context follows" : `${modelName(selection)} selected · switch anytime`}</span><span>Enter to send</span></div>{error && <div className="error"><span>{error}</span><button onClick={() => setError("")}>Dismiss</button></div>}</footer></section>
   </main>;
 }
 
