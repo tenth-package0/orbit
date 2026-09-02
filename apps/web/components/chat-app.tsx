@@ -55,7 +55,10 @@ export function ChatApp({ email }: { email: string }) {
         if (event.type === "text_delta") setMessages((old) => old.map((message) => message.id === generationIds.get(event.generationId) ? { ...message, content: message.content + event.delta } : message));
         if (event.type === "metadata") setMessages((old) => old.map((message) => message.id === generationIds.get(event.generationId) ? { ...message, latency_ms: event.latencyMs } : message));
         if (event.type === "complete") setMessages((old) => old.map((message) => message.id === generationIds.get(event.generationId) ? { ...message, id: event.messageId } : message));
-        if (event.type === "error") setError(event.error.message);
+        if (event.type === "error") {
+          setError(event.error.message);
+          if (event.generationId) setMessages((old) => old.map((message) => message.id === generationIds.get(event.generationId!) ? { ...message, content: `_${event.error.message}_` } : message));
+        }
       });
     } catch (cause) { if ((cause as Error).name !== "AbortError") setError((cause as Error).message); } finally { setRunning(false); }
   }
