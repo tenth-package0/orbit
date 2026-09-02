@@ -1,0 +1,22 @@
+{
+  "version": "2026-09",
+  "collectedAt": "2026-09-01",
+  "models": {
+    "openai-gpt-5.6-sol": {
+      "quality": { "coding": 96, "math": 97, "reasoning": 96, "long-context": 96, "general": 95 },
+      "speed": 78,
+      "cost": 58
+    },
+    "anthropic-claude-opus-5": {
+      "quality": { "coding": 98, "math": 93, "reasoning": 97, "long-context": 95, "general": 96 },
+      "speed": 70,
+      "cost": 52
+    },
+    "google-gemini-3.7-flash": {
+      "quality": { "coding": 92, "math": 95, "reasoning": 93, "long-context": 98, "general": 94 },
+      "speed": 96,
+      "cost": 92
+    }
+  }
+}
+
