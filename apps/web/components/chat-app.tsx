@@ -1,47 +1,17 @@
 "use client";
 
 import type { GenerationSelection, OrbitStreamEvent } from "@orbit/contracts";
-import { ArrowDown, ArrowUp, FileText, ImageIcon, LogOut, Menu, Paperclip, Plus, Square, Trash2, X } from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { createClient } from "@/lib/supabase/client";
 import { getGuestSessionId, guestHistoryKey, normalizeGuestTranscript, readGuestHistory, writeGuestHistory, type GuestConversation } from "@/lib/guest-history";
 import { readOrbitStream } from "@/lib/stream";
-
-type Conversation = { id: string; title: string };
-type Attachment = { id: string; file_name: string; mime_type: string; size_bytes: number; storage_path: string; previewUrl?: string };
-type Message = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  provider?: string;
-  model?: string;
-  latency_ms?: number;
-  comparison_group_id?: string;
-  routingCategory?: string;
-  message_attachments?: Attachment[];
-  failed?: boolean;
-};
+import { composerHeight, isNearBottom, models } from "./chat/config";
+import { MessageList } from "./chat/message-list";
+import { Composer, Sidebar, Topbar, Welcome } from "./chat/shell-parts";
+import type { Attachment, Conversation, Message } from "./chat/types";
 
 const allowedAttachmentTypes = new Set(["image/png", "image/jpeg", "image/webp", "application/pdf", "text/plain"]);
 
-const models = [
-  { key: "openai-gpt-5.6-sol", label: "GPT-5.6 Sol", short: "GPT", description: "Precise coding and structured work", color: "#79a7ff" },
-  { key: "anthropic-claude-opus-5", label: "Claude Opus 5", short: "Claude", description: "Deep reasoning and nuanced writing", color: "#e7a977" },
-  { key: "google-gemini-3.6-flash", label: "Gemini 3.6 Flash", short: "Gemini", description: "Fast synthesis and long context", color: "#75d7b2" }
-];
-
-// The five selectable modes, in the order they appear in the top bar and the welcome list.
-const modes = [
-  { key: "auto", label: "Auto", description: "Routes each prompt to the strongest model" },
-  ...models.map((model) => ({ key: model.key, label: model.label, description: model.description })),
-  { key: "compare", label: "Compare", description: "All three answer side by side" }
-];
-
-const icon = { size: 16, strokeWidth: 1.75 };
 
 export function ChatApp({ email }: { email?: string }) {
   const supabase = createClient();
@@ -93,7 +63,7 @@ export function ChatApp({ email }: { email?: string }) {
     const textarea = composerInput.current;
     if (!textarea) return;
     textarea.style.height = "0px";
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
+    textarea.style.height = `${composerHeight(textarea.scrollHeight)}px`;
     const pane = messagesPane.current;
     if (pane && nearBottom.current) pane.scrollTo({ top: pane.scrollHeight, behavior: "instant" });
   }, [draft]);
@@ -117,7 +87,7 @@ export function ChatApp({ email }: { email?: string }) {
   function trackScroll() {
     const pane = messagesPane.current;
     if (!pane) return;
-    const near = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 120;
+    const near = isNearBottom(pane);
     nearBottom.current = near;
     setAtBottom(near);
   }
@@ -358,68 +328,24 @@ export function ChatApp({ email }: { email?: string }) {
   }
 
   const visibleConversations = signedIn ? conversations : guestConversations;
-  const canSend = Boolean(draft.trim() || pendingFiles.length);
-
   return (
     <main className="shell">
-      <div className={`drawer-backdrop ${sidebarOpen ? "show" : ""}`} onClick={() => setSidebarOpen(false)} />
-
-      <aside className={`sidebar ${sidebarOpen ? "open" : ""}`} aria-label="Conversations">
-        <div className="sidebar-header">
-          <div className="brand">
-            <Image src="/orbit-logo.png" alt="" width={26} height={26} />
-            <span>Orbit</span>
-          </div>
-          <button className="icon-button sidebar-close" aria-label="Close menu" onClick={() => setSidebarOpen(false)}><X {...icon} /></button>
-        </div>
-
-        <button className="new-chat" onClick={createConversation}><Plus {...icon} />New chat</button>
-
-        <nav className="history" aria-label="Recent conversations">
-          <div className="history-label">Recent</div>
-          {visibleConversations.length === 0 && <p className="history-empty">Nothing yet. Start a chat and it will appear here.</p>}
-          <ul className="conversation-list">
-            {visibleConversations.map((conversation) => (
-              <li className="conversation-row" key={conversation.id}>
-                <button className="conversation" aria-current={conversation.id === conversationId ? "true" : undefined} onClick={() => openConversation(conversation.id)}>
-                  {conversation.title}
-                </button>
-                <button className="delete-chat" aria-label={`Delete ${conversation.title}`} onClick={() => removeConversation(conversation.id)}><Trash2 size={14} strokeWidth={1.75} /></button>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
-        <div className="sidebar-footer">
-          {signedIn ? (
-            <div className="account">
-              <span className="avatar" aria-hidden="true">{email?.[0]}</span>
-              <span className="account-email" title={email}>{email}</span>
-              <button className="icon-button" aria-label="Sign out" title="Sign out" onClick={signOut}><LogOut {...icon} /></button>
-            </div>
-          ) : (
-            <div className="guest-cta">
-              <p>Guest mode<small>History stays in this browser. Sign in to sync chats and attach files.</small></p>
-              <Link className="button primary" href="/sign-in">Sign in</Link>
-              <button className="link-button" onClick={clearGuestHistory}>Clear local history</button>
-            </div>
-          )}
-        </div>
-      </aside>
+      <Sidebar
+        open={sidebarOpen}
+        signedIn={signedIn}
+        email={email}
+        conversations={visibleConversations}
+        activeId={conversationId}
+        onClose={() => setSidebarOpen(false)}
+        onCreate={() => void createConversation()}
+        onOpen={(id) => void openConversation(id)}
+        onRemove={(id) => void removeConversation(id)}
+        onSignOut={() => void signOut()}
+        onClearGuestHistory={clearGuestHistory}
+      />
 
       <section className="main">
-        <header className="topbar">
-          <button className="icon-button mobile-menu" aria-label="Open menu" onClick={() => setSidebarOpen(true)}><Menu {...icon} /></button>
-          <div className="model-tabs" role="group" aria-label="Model">
-            {modes.map((mode) => (
-              <button key={mode.key} className="model-tab" aria-pressed={selection === mode.key} onClick={() => setSelection(mode.key)}>
-                <ModelMark modelKey={mode.key} />
-                {shortName(mode.key)}
-              </button>
-            ))}
-          </div>
-          <span className="topbar-note">{modeNote(selection)}</span>
-        </header>
+        <Topbar selection={selection} onSelect={setSelection} onOpenMenu={() => setSidebarOpen(true)} />
 
         <div className="messages" ref={messagesPane} onScroll={trackScroll} tabIndex={0} role="region" aria-label="Conversation">
           {loadingConversation ? (
@@ -427,234 +353,31 @@ export function ChatApp({ email }: { email?: string }) {
           ) : messages.length === 0 ? (
             <Welcome selection={selection} onSelect={setSelection} />
           ) : (
-            renderMessages(messages, running, secondPass)
+            <MessageList messages={messages} running={running} onSecondPass={secondPass} />
           )}
         </div>
 
-        <footer className="composer-wrap">
-          {messages.length > 0 && !atBottom && (
-            <button className="jump-to-latest" onClick={scrollToLatest}><ArrowDown size={14} strokeWidth={2} />Latest</button>
-          )}
-
-          {pendingFiles.length > 0 && (
-            <ul className="pending-files">
-              {pendingFiles.map((file, index) => (
-                <li className="pending-file" key={`${file.name}-${index}`}>
-                  {file.type.startsWith("image/") ? <ImageIcon size={14} strokeWidth={1.75} /> : <FileText size={14} strokeWidth={1.75} />}
-                  <span>{file.name}</span>
-                  <small>{formatBytes(file.size)}</small>
-                  <button aria-label={`Remove ${file.name}`} onClick={() => setPendingFiles((old) => old.filter((_, itemIndex) => itemIndex !== index))}><X size={13} /></button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <div className="composer">
-            <input ref={fileInput} className="file-input" type="file" multiple accept="image/png,image/jpeg,image/webp,application/pdf,text/plain,.txt" onChange={(event) => { chooseFiles(event.target.files); event.target.value = ""; }} />
-            <textarea
-              ref={composerInput}
-              aria-label="Message"
-              rows={1}
-              placeholder={selection === "compare" ? "Ask all three models" : "Message Orbit"}
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }}
-            />
-            <div className="composer-actions">
-              <button className="attach" aria-label={signedIn ? "Attach files" : "Sign in to attach files"} title={signedIn ? "Attach files" : "Sign in to attach files"} disabled={running || !signedIn} onClick={() => fileInput.current?.click()}><Paperclip {...icon} /></button>
-              <span className="composer-hint">{signedIn ? "PNG, JPG, WebP, PDF, or TXT up to 10 MB each" : "Sign in to attach files"}</span>
-              {running ? (
-                <button className="send stop" aria-label="Stop generating" title="Stop" onClick={() => aborter.current?.abort()}><Square size={12} strokeWidth={2.5} fill="currentColor" /></button>
-              ) : (
-                <button className="send" aria-label="Send" title="Send" disabled={!canSend} onClick={() => void send()}><ArrowUp size={16} strokeWidth={2.25} /></button>
-              )}
-            </div>
-          </div>
-
-          <div className="composer-foot">
-            <span>{composerNote(selection)}</span>
-            <span><kbd>Enter</kbd> to send, <kbd>Shift + Enter</kbd> for a new line</span>
-          </div>
-
-          {error && (
-            <div className="error" role="alert">
-              <span>{error}</span>
-              <div className="error-actions">
-                <button onClick={() => void retryLast()}>Retry</button>
-                <button onClick={() => setError("")}>Dismiss</button>
-              </div>
-            </div>
-          )}
-        </footer>
+        <Composer
+          selection={selection}
+          signedIn={signedIn}
+          running={running}
+          atBottom={atBottom}
+          hasMessages={messages.length > 0}
+          pendingFiles={pendingFiles}
+          draft={draft}
+          error={error}
+          textareaRef={composerInput}
+          fileInputRef={fileInput}
+          setPendingFiles={setPendingFiles}
+          setDraft={setDraft}
+          onChooseFiles={chooseFiles}
+          onSend={() => void send()}
+          onStop={() => aborter.current?.abort()}
+          onLatest={scrollToLatest}
+          onRetry={() => void retryLast()}
+          onDismissError={() => setError("")}
+        />
       </section>
     </main>
   );
-}
-
-function Welcome({ selection, onSelect }: { selection: string; onSelect: (key: string) => void }) {
-  return (
-    <div className="empty">
-      <Image src="/orbit-logo.png" alt="" width={56} height={56} priority />
-      <h1>One conversation. Any model.</h1>
-      <p>Auto routes each prompt to the strongest model. Hold one model, or compare all three. Switch at any point and the whole thread follows.</p>
-      <div className="mode-list" role="group" aria-label="Choose how Orbit answers">
-        {modes.map((mode) => (
-          <button key={mode.key} className="mode-option" aria-pressed={selection === mode.key} onClick={() => onSelect(mode.key)}>
-            <ModelMark modelKey={mode.key} />
-            <span><strong>{mode.label}</strong><small>{mode.description}</small></span>
-            <span className="check" aria-hidden="true" />
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// Consecutive messages that share a comparison group render as one three-column block.
-function renderMessages(messages: Message[], running: boolean, secondPass: (key: string) => void) {
-  const seenGroups = new Set<string>();
-  return messages.flatMap((message, index) => {
-    if (!message.comparison_group_id) {
-      return [<MessageCard key={message.id} message={message} latest={index === messages.length - 1} running={running} onSecondPass={secondPass} />];
-    }
-    if (seenGroups.has(message.comparison_group_id)) return [];
-    seenGroups.add(message.comparison_group_id);
-    const group = messages.filter((item) => item.comparison_group_id === message.comparison_group_id);
-    return [
-      <div className="comparison" key={message.comparison_group_id}>
-        {group.map((item) => <CompareCard key={item.id} message={item} running={running} />)}
-      </div>
-    ];
-  });
-}
-
-function MessageCard({ message, latest, running, onSecondPass }: { message: Message; latest: boolean; running: boolean; onSecondPass: (key: string) => void }) {
-  const suggestion = suggestedModel(message.model);
-  const streaming = running && message.id.startsWith("stream-") && Boolean(message.content);
-  return (
-    <div className={`turn ${message.role}`}>
-      <article className={`message ${message.failed ? "failed" : ""} ${streaming ? "streaming" : ""}`} aria-busy={streaming || undefined}>
-        <MessageFiles files={message.message_attachments} />
-        <MessageBody message={message} />
-        {message.role === "assistant" && (
-          <footer className="message-meta">
-            <span className="model-name"><ModelMark modelKey={message.model} />{modelName(message.model)}</span>
-            {message.routingCategory && <span>Auto chose this for {message.routingCategory}</span>}
-            {message.latency_ms ? <span className="latency">{(message.latency_ms / 1000).toFixed(1)}s</span> : null}
-            {message.content && !streaming && <CopyButton text={message.content} />}
-          </footer>
-        )}
-        {message.role === "assistant" && latest && message.content && !running && suggestion && (
-          <aside className="second-pass">
-            <ModelMark modelKey={suggestion.key} />
-            <p><strong>{suggestion.label}</strong> approaches this differently. Ask it the same question for a second view.</p>
-            <button className="button" disabled={running} onClick={() => onSecondPass(suggestion.key)}>Ask {suggestion.short}</button>
-          </aside>
-        )}
-      </article>
-    </div>
-  );
-}
-
-function CompareCard({ message, running }: { message: Message; running: boolean }) {
-  const streaming = running && message.id.startsWith("stream-") && Boolean(message.content);
-  return (
-    <article className={`compare-card message ${message.failed ? "failed" : ""} ${streaming ? "streaming" : ""}`} aria-busy={streaming || undefined}>
-      <header className="compare-head">
-        <ModelMark modelKey={message.model} />
-        {modelName(message.model)}
-        {message.latency_ms ? <span className="latency">{(message.latency_ms / 1000).toFixed(1)}s</span> : null}
-      </header>
-      <MessageBody message={message} />
-    </article>
-  );
-}
-
-function MessageBody({ message }: { message: Message }) {
-  return (
-    <div className="message-body markdown">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>{message.content}</ReactMarkdown>
-      {!message.content && <div className="thinking" role="status" aria-label="Thinking"><span /><span /><span /></div>}
-    </div>
-  );
-}
-
-function MessageFiles({ files }: { files?: Attachment[] }) {
-  if (!files?.length) return null;
-  return (
-    <div className="message-files">
-      {files.map((file) => file.previewUrl ? (
-        <a key={file.id} href={file.previewUrl} target="_blank" rel="noreferrer" className="message-image">
-          <img src={file.previewUrl} alt={file.file_name} />
-          <span>{file.file_name}</span>
-        </a>
-      ) : (
-        <div className="message-file" key={file.id}>
-          <FileText size={14} strokeWidth={1.75} />
-          <span>{file.file_name}</span>
-          <small>{formatBytes(file.size_bytes)}</small>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // Clipboard access can be denied; the button simply stays as "Copy".
-    }
-  }
-  return <button className="copy" onClick={copy} aria-live="polite">{copied ? "Copied" : "Copy"}</button>;
-}
-
-// A model's identity mark: a colored ring, a periwinkle disc for Auto, or three dots for Compare.
-function ModelMark({ modelKey }: { modelKey?: string }) {
-  if (modelKey === "auto") return <span className="model-mark auto" aria-hidden="true" />;
-  if (modelKey === "compare") return <span className="model-mark compare" aria-hidden="true" />;
-  return <span className="model-mark" aria-hidden="true" style={{ "--mark": modelColor(modelKey) } as React.CSSProperties} />;
-}
-
-function findModel(id?: string) {
-  return models.find((model) => model.key === id || model.key.endsWith(id ?? "__"));
-}
-
-function modelName(id?: string) {
-  if (id === "auto") return "Auto";
-  if (id === "compare") return "Compare";
-  return findModel(id)?.label ?? id ?? "Orbit";
-}
-
-function shortName(id: string) {
-  return findModel(id)?.short ?? modelName(id);
-}
-
-function modelColor(id?: string) {
-  return findModel(id)?.color ?? "#9da7ff";
-}
-
-function composerNote(selection: string) {
-  if (selection === "auto") return "Auto picks the model for each prompt. The full thread follows.";
-  if (selection === "compare") return "All three models answer the same prompt. One message, three calls.";
-  return `${modelName(selection)} will answer. Switch models anytime.`;
-}
-
-function modeNote(selection: string) {
-  if (selection === "auto") return "Routes each prompt by task";
-  if (selection === "compare") return "Three models, three calls";
-  return "Full thread context follows";
-}
-
-function suggestedModel(current?: string) {
-  if (!current) return undefined;
-  return current.includes("claude") ? models[0] : models[1];
-}
-
-function formatBytes(bytes: number) {
-  return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }

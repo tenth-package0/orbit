@@ -1,0 +1,136 @@
+/* ---------------------------------------------------------------------------
+   Auth pages
+--------------------------------------------------------------------------- */
+
+.auth {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.auth-card {
+  width: min(400px, 100%);
+  padding: 32px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--bg-sidebar);
+}
+
+.auth-card .brand {
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.auth-card h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-align: center;
+}
+
+.auth-card > p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+  text-align: center;
+}
+
+.auth-card form {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.divider + form {
+  margin-top: 0;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field span {
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.auth-card input {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 14px;
+  transition: border-color var(--fast) var(--ease);
+}
+
+.auth-card input::placeholder {
+  color: var(--text-3);
+}
+
+.auth-card input:focus {
+  outline: 0;
+  border-color: var(--accent);
+}
+
+.auth-card .button {
+  width: 100%;
+  height: 40px;
+  margin-top: 4px;
+}
+
+.auth-card .google {
+  margin-top: 24px;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: var(--line);
+}
+
+.auth-switch {
+  margin: 20px 0 0;
+  color: var(--text-3);
+  font-size: 13px;
+  text-align: center;
+}
+
+.auth-switch a {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+}
+
+.auth-card .notice {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.auth-card .notice.is-error {
+  border-color: rgba(240, 144, 144, 0.3);
+  background: var(--danger-soft);
+  color: var(--danger);
+}

@@ -1,0 +1,175 @@
+/* ---------------------------------------------------------------------------
+   Animation
+--------------------------------------------------------------------------- */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+
+@keyframes breathe {
+  0%, 60%, 100% { opacity: 0.25; }
+  30% { opacity: 1; }
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+@keyframes shimmer {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* ---------------------------------------------------------------------------
+   Responsive
+--------------------------------------------------------------------------- */
+
+@media (max-width: 1180px) {
+  .comparison {
+    grid-template-columns: minmax(0, 1fr);
+    width: min(100%, var(--thread-width));
+  }
+}
+
+@media (max-width: 900px) {
+  .topbar-note {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(84vw, 300px);
+    translate: -100% 0;
+    box-shadow: none;
+    transition: translate var(--normal) var(--ease), box-shadow var(--normal) var(--ease);
+  }
+
+  .sidebar.open {
+    translate: 0 0;
+    box-shadow: var(--shadow);
+  }
+
+  .sidebar-close,
+  .mobile-menu {
+    display: grid;
+  }
+
+  .sidebar-close {
+    margin-left: auto;
+  }
+
+  .drawer-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 15;
+    background: rgba(0, 0, 0, 0.6);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--normal) var(--ease);
+  }
+
+  .drawer-backdrop.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .topbar {
+    height: 52px;
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  .model-tabs {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* All five modes fit on a 360px screen once the marks are dropped. */
+  .model-tab {
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  .model-tab .model-mark:not(.compare) {
+    display: none;
+  }
+
+  .messages {
+    padding: 20px 16px 16px;
+  }
+
+  .turn.user .message {
+    max-width: 90%;
+  }
+
+  .empty {
+    justify-content: flex-start;
+    padding-top: 6vh;
+  }
+
+  .empty h1 {
+    font-size: 22px;
+  }
+
+  .composer-wrap {
+    padding: 6px 10px 10px;
+  }
+
+  .composer {
+    box-shadow: none;
+  }
+
+  .composer-foot span:last-child {
+    display: none;
+  }
+
+  .second-pass {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .second-pass .button {
+    justify-content: center;
+  }
+
+  .pending-file {
+    max-width: 220px;
+  }
+
+  .message-image {
+    width: min(200px, 100%);
+  }
+
+  .auth-card {
+    padding: 24px 20px;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Reduced motion
+--------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .thinking span {
+    opacity: 0.7;
+  }
+}
