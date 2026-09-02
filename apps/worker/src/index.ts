@@ -1,12 +1,12 @@
-import type { OrbitStreamEvent, PublicError } from "@orbit/contracts";
+import type { ChatMessage, GenerationSelection, OrbitStreamEvent, PublicError } from "@orbit/contracts";
 import { routePrompt } from "@orbit/router";
-import { authenticate } from "./auth";
+import { authorize, type RequestContext } from "./auth";
 import type { Env } from "./env";
 import { getModel, MODELS } from "./models";
 import { adapters } from "./providers";
 import { ProviderHttpError } from "./providers/provider";
 import { loadConversation, saveAssistant } from "./supabase";
-import { generationSchema } from "./validation";
+import { authenticatedGenerationSchema, guestGenerationSchema } from "./validation";
 
 const encoder = new TextEncoder();
 const json = (body: unknown, status = 200, headers: HeadersInit = {}) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
@@ -34,12 +34,18 @@ export async function rateLimit(env: Env, userId: string, ip: string, units: num
   return true;
 }
 
+export async function guestRateLimit(env: Env, ip: string, units: number) {
+  // Burst counts a user interaction so Compare remains possible; the minute budget counts all three provider calls.
+  if (!(await env.GUEST_BURST.limit({ key: ip })).success) return false;
+  for (let i = 0; i < units; i++) if (!(await env.GUEST_MINUTE.limit({ key: ip })).success) return false;
+  return true;
+}
+
 function providerKey(env: Env, provider: string) {
   return provider === "openai" ? env.OPENAI_API_KEY : provider === "anthropic" ? env.ANTHROPIC_API_KEY : env.GOOGLE_API_KEY;
 }
 
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+export async function handleRequest(request: Request, env: Env, authorizeRequest = authorize): Promise<Response> {
     const requestId = crypto.randomUUID();
     const allowedOrigin = cors(request, env);
     const corsHeaders: Record<string, string> = allowedOrigin ? { "access-control-allow-origin": allowedOrigin, vary: "Origin", "access-control-allow-headers": "authorization,content-type", "access-control-allow-methods": "POST,OPTIONS" } : {};
@@ -49,17 +55,34 @@ export default {
     if (Number(request.headers.get("content-length") ?? 0) > 262_144) return json({ error: publicError("PAYLOAD_TOO_LARGE", requestId) }, 413, corsHeaders);
 
     try {
-      const { userId, token } = await authenticate(request, env.SUPABASE_URL);
-      const parsed = generationSchema.safeParse(await request.json());
-      if (!parsed.success) return json({ error: publicError("INVALID_REQUEST", requestId) }, 400, corsHeaders);
-      const input = parsed.data;
-      const requestedKeys = input.selection.mode === "compare" ? input.selection.modelKeys : input.selection.mode === "model" ? [input.selection.modelKey] : [];
+      const context = await authorizeRequest(request, env.SUPABASE_URL);
+      const body = await request.json();
+      let selection: GenerationSelection;
+      let messages: ChatMessage[] | undefined;
+      let conversationId: string | undefined;
+      let userMessageId: string | undefined;
+      if (context.kind === "authenticated") {
+        const parsed = authenticatedGenerationSchema.safeParse(body);
+        if (!parsed.success) return json({ error: publicError("INVALID_REQUEST", requestId) }, 400, corsHeaders);
+        selection = parsed.data.selection;
+        conversationId = parsed.data.conversationId;
+        userMessageId = parsed.data.userMessageId;
+      } else {
+        const parsed = guestGenerationSchema.safeParse(body);
+        if (!parsed.success) return json({ error: publicError("INVALID_REQUEST", requestId) }, 400, corsHeaders);
+        selection = parsed.data.selection;
+        messages = parsed.data.messages;
+      }
+      const requestedKeys = selection.mode === "compare" ? selection.modelKeys : selection.mode === "model" ? [selection.modelKey] : [];
       if (requestedKeys.some((key) => !getModel(key))) return json({ error: publicError("MODEL_NOT_ALLOWED", requestId) }, 400, corsHeaders);
-      const units = input.selection.mode === "compare" ? requestedKeys.length : 1;
-      if (!await rateLimit(env, userId, request.headers.get("cf-connecting-ip") ?? "unknown", units)) return json({ error: { ...publicError("RATE_LIMITED", requestId, true), retryAfterSeconds: 60 } }, 429, { ...corsHeaders, "retry-after": "60" });
-      const messages = await loadConversation(env, token, input.conversationId, input.userMessageId);
-      const lastPrompt = [...messages].reverse().find((message) => message.role === "user")?.content ?? "";
-      const routing = input.selection.mode === "auto" ? routePrompt(lastPrompt, MODELS) : undefined;
+      const units = selection.mode === "compare" ? requestedKeys.length : 1;
+      const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
+      const allowed = context.kind === "authenticated" ? await rateLimit(env, context.userId, ip, units) : await guestRateLimit(env, ip, units);
+      if (!allowed) return json({ error: { ...publicError("RATE_LIMITED", requestId, true), retryAfterSeconds: 60 } }, 429, { ...corsHeaders, "retry-after": "60" });
+      if (context.kind === "authenticated") messages = await loadConversation(env, context.token, conversationId!, userMessageId!);
+      const conversationMessages = messages!;
+      const lastPrompt = [...conversationMessages].reverse().find((message) => message.role === "user")?.content ?? "";
+      const routing = selection.mode === "auto" ? routePrompt(lastPrompt, MODELS) : undefined;
       const keys = routing ? [routing.modelKey] : requestedKeys;
       const comparisonGroupId = keys.length > 1 ? crypto.randomUUID() : undefined;
       const stream = new TransformStream<Uint8Array, Uint8Array>();
@@ -73,12 +96,14 @@ export default {
         let usage: { inputTokens?: number; outputTokens?: number } = {};
         await writer.write(sse({ type: "start", requestId, generationId, provider: model.provider, model: model.id, comparisonGroupId, routing }));
         try {
-          for await (const event of adapters[model.provider].stream({ model: model.id, messages, maxOutputTokens: Math.min(model.maxOutputTokens, 8192), signal: request.signal }, providerKey(env, model.provider))) {
+          for await (const event of adapters[model.provider].stream({ model: model.id, messages: conversationMessages, maxOutputTokens: Math.min(model.maxOutputTokens, 8192), signal: request.signal }, providerKey(env, model.provider))) {
             if (event.type === "text_delta") { content += event.text; await writer.write(sse({ type: "text_delta", generationId, delta: event.text })); }
             if (event.type === "usage") usage = { inputTokens: event.inputTokens, outputTokens: event.outputTokens };
             if (event.type === "complete") {
               const latencyMs = Date.now() - started;
-              const messageId = await saveAssistant(env, token, input.conversationId, model, content, latencyMs, usage, comparisonGroupId);
+              const messageId = context.kind === "authenticated"
+                ? await saveAssistant(env, context.token, conversationId!, model, content, latencyMs, usage, comparisonGroupId)
+                : crypto.randomUUID();
               await writer.write(sse({ type: "metadata", generationId, latencyMs, ...usage }));
               await writer.write(sse({ type: "complete", generationId, finishReason: event.finishReason, messageId }));
             }
@@ -97,5 +122,8 @@ export default {
       console.error(JSON.stringify({ requestId, outcome: "error", code }));
       return json({ error: publicError(code, requestId) }, code === "UNAUTHENTICATED" ? 401 : code === "FORBIDDEN" ? 403 : code === "PAYLOAD_TOO_LARGE" ? 413 : 500, corsHeaders);
     }
-  }
+}
+
+export default {
+  fetch: handleRequest
 };

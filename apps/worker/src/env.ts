@@ -10,4 +10,6 @@ export type Env = {
   USER_MINUTE: RateLimiter;
   USER_BURST: RateLimiter;
   IP_MINUTE: RateLimiter;
+  GUEST_MINUTE: RateLimiter;
+  GUEST_BURST: RateLimiter;
 };
