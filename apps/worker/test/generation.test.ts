@@ -20,6 +20,14 @@ const urlOf = (input: unknown) => input instanceof Request ? input.url : String(
 afterEach(() => vi.unstubAllGlobals());
 
 describe("generation contexts", () => {
+  it("ignores Cloudflare's execution context at the public fetch boundary", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(providerResponse("openai")));
+    const productionFetch = worker.fetch as (...args: unknown[]) => Promise<Response>;
+    const response = await productionFetch(request(guestBody()), env(), {});
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('"type":"complete"');
+  });
+
   it("allows a valid guest request without touching Supabase persistence", async () => {
     const fetchMock = vi.fn().mockImplementation((input) => providerResponse(urlOf(input).includes("openai") ? "openai" : "unknown"));
     vi.stubGlobal("fetch", fetchMock);

@@ -125,5 +125,7 @@ export async function handleRequest(request: Request, env: Env, authorizeRequest
 }
 
 export default {
-  fetch: handleRequest
+  fetch(request: Request, env: Env) {
+    return handleRequest(request, env);
+  }
 };
