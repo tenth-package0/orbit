@@ -16,7 +16,7 @@ const allowedAttachmentTypes = new Set(["image/png", "image/jpeg", "image/webp",
 const models = [
   { key: "openai-gpt-5.6-sol", label: "GPT-5.6 Sol", short: "GPT", description: "Precise coding and structured work", color: "#79a7ff" },
   { key: "anthropic-claude-opus-5", label: "Claude Opus 5", short: "Claude", description: "Deep reasoning and nuanced writing", color: "#e7a977" },
-  { key: "google-gemini-3.7-flash", label: "Gemini 3.7 Flash", short: "Gemini", description: "Fast synthesis and long context", color: "#75d7b2" }
+  { key: "google-gemini-3.6-flash", label: "Gemini 3.6 Flash", short: "Gemini", description: "Fast synthesis and long context", color: "#75d7b2" }
 ];
 
 export function ChatApp({ email }: { email: string }) {

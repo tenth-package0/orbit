@@ -12,11 +12,10 @@
       "speed": 70,
       "cost": 52
     },
-    "google-gemini-3.7-flash": {
-      "quality": { "coding": 92, "math": 95, "reasoning": 93, "long-context": 98, "general": 94 },
-      "speed": 96,
+    "google-gemini-3.6-flash": {
+      "quality": { "coding": 90, "math": 93, "reasoning": 91, "long-context": 97, "general": 92 },
+      "speed": 95,
       "cost": 92
     }
   }
 }
-

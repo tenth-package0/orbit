@@ -24,7 +24,7 @@ The browser never receives provider credentials. Conversation data and private a
 
 - OpenAI: `gpt-5.6-sol`
 - Anthropic: `claude-opus-5`
-- Google: `gemini-3.7-flash`
+- Google: `gemini-3.6-flash`
 
 These IDs were verified against official provider documentation on September 1, 2026. They are intentionally held in one server-side registry.
 

@@ -14,3 +14,4 @@ Sources consulted on 2026-09-01:
 
 The checked-in values are a curated snapshot because leaderboards use different prompts, harnesses, reasoning settings, and graders. Update them in a reviewed pull request when a selected model changes or at least quarterly; Orbit never scrapes benchmark sites at request time.
 
+Gemini 3.6 Flash replaced 3.7 Flash on 2026-09-01 after repeated production `503 UNAVAILABLE` responses from 3.7. Google documents 3.6 as the previous GA model and a temporary migration target when 3.7 capacity is unavailable. Its normalized quality values are conservatively reduced from the 3.7 snapshot pending comparable third-party benchmark coverage.
