@@ -61,9 +61,8 @@ export type PublicError = {
 };
 
 export type OrbitStreamEvent =
-  | { type: "start"; requestId: string; generationId: string; provider: Provider; model: string; routing?: RoutingDecision }
+  | { type: "start"; requestId: string; generationId: string; provider: Provider; model: string; comparisonGroupId?: string; routing?: RoutingDecision }
   | { type: "text_delta"; generationId: string; delta: string }
   | { type: "metadata"; generationId: string; latencyMs?: number; inputTokens?: number; outputTokens?: number }
   | { type: "complete"; generationId: string; finishReason: FinishReason; messageId: string }
   | { type: "error"; generationId?: string; error: PublicError };
-

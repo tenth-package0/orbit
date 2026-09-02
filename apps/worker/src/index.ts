@@ -69,7 +69,7 @@ export default {
         const started = Date.now();
         let content = "";
         let usage: { inputTokens?: number; outputTokens?: number } = {};
-        await writer.write(sse({ type: "start", requestId, generationId, provider: model.provider, model: model.id, routing }));
+        await writer.write(sse({ type: "start", requestId, generationId, provider: model.provider, model: model.id, comparisonGroupId, routing }));
         try {
           for await (const event of adapters[model.provider].stream({ model: model.id, messages, maxOutputTokens: Math.min(model.maxOutputTokens, 8192), signal: request.signal }, providerKey(env, model.provider))) {
             if (event.type === "text_delta") { content += event.text; await writer.write(sse({ type: "text_delta", generationId, delta: event.text })); }

@@ -49,7 +49,7 @@ export function ChatApp({ email }: { email: string }) {
       const requestSelection: GenerationSelection = selection === "auto" ? { mode: "auto" } : selection === "compare" ? { mode: "compare", modelKeys: models.map((m) => m.key) } : { mode: "model", modelKey: selection };
       const response = await fetch(`${process.env.NEXT_PUBLIC_WORKER_URL}/v1/generations`, { method: "POST", headers: { authorization: `Bearer ${session.access_token}`, "content-type": "application/json" }, body: JSON.stringify({ conversationId: activeId, userMessageId: userMessage.id, selection: requestSelection }), signal: aborter.current.signal });
       await readOrbitStream(response, (event: OrbitStreamEvent) => {
-        if (event.type === "start") { const tempId = `stream-${event.generationId}`; generationIds.set(event.generationId, tempId); setMessages((old) => [...old, { id: tempId, role: "assistant", content: "", provider: event.provider, model: event.model }]); }
+        if (event.type === "start") { const tempId = `stream-${event.generationId}`; generationIds.set(event.generationId, tempId); setMessages((old) => [...old, { id: tempId, role: "assistant", content: "", provider: event.provider, model: event.model, comparison_group_id: event.comparisonGroupId }]); }
         if (event.type === "text_delta") setMessages((old) => old.map((m) => m.id === generationIds.get(event.generationId) ? { ...m, content: m.content + event.delta } : m));
         if (event.type === "metadata") setMessages((old) => old.map((m) => m.id === generationIds.get(event.generationId) ? { ...m, latency_ms: event.latencyMs } : m));
         if (event.type === "complete") setMessages((old) => old.map((m) => m.id === generationIds.get(event.generationId) ? { ...m, id: event.messageId } : m));
@@ -65,8 +65,24 @@ export function ChatApp({ email }: { email: string }) {
       <div className="sidebar-bottom"><span>{email}</span><button className="icon-button" aria-label="Sign out" onClick={async () => { await supabase.auth.signOut(); window.location.href = "/sign-in"; }}><LogOut size={16}/></button></div>
     </aside>
     <section className="main"><header className="topbar"><select className="model-button" value={selection} onChange={(e) => setSelection(e.target.value)}><option value="auto">Auto</option>{models.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}<option value="compare">Compare all three</option></select><span className="mode-note">{selection === "compare" ? "3 provider calls" : "Benchmark-informed routing"}</span></header>
-      <div className="messages">{messages.length === 0 ? <div className="empty"><div><h1>Where should we begin?</h1><p>Ask once. Choose a model, let Orbit route it, or compare all three.</p></div></div> : messages.map((m) => <article key={m.id} className={`message ${m.role}`}><ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>{m.content || "Thinking…"}</ReactMarkdown>{m.role === "assistant" && <div className="message-meta">{m.model}{m.latency_ms ? ` · ${(m.latency_ms/1000).toFixed(1)}s` : ""}</div>}</article>)}</div>
+      <div className="messages">{messages.length === 0 ? <div className="empty"><div><h1>Where should we begin?</h1><p>Ask once. Choose a model, let Orbit route it, or compare all three.</p></div></div> : renderMessages(messages)}</div>
       <footer className="composer-wrap"><div className="composer"><textarea aria-label="Message" placeholder={selection === "compare" ? "Ask all three models…" : "Message Orbit…"} value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}/><button className="send" aria-label={running ? "Stop" : "Send"} disabled={!draft.trim() && !running} onClick={() => running ? aborter.current?.abort() : void send()}>{running ? "■" : <Send size={18}/>}</button></div>{error && <div className="error">{error} <button onClick={() => setError("")}>Dismiss</button></div>}</footer>
     </section>
   </main>;
+}
+
+function renderMessages(messages: Message[]) {
+  const renderedGroups = new Set<string>();
+  return messages.flatMap((message) => {
+    const groupId = message.comparison_group_id;
+    if (!groupId) return [<MessageCard key={message.id} message={message}/>];
+    if (renderedGroups.has(groupId)) return [];
+    renderedGroups.add(groupId);
+    const group = messages.filter((candidate) => candidate.comparison_group_id === groupId);
+    return [<div className="comparison" key={groupId}>{group.map((candidate) => <MessageCard key={candidate.id} message={candidate}/>)}</div>];
+  });
+}
+
+function MessageCard({ message }: { message: Message }) {
+  return <article className={`message ${message.role}`}><ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>{message.content || "Thinking…"}</ReactMarkdown>{message.role === "assistant" && <div className="message-meta">{message.model}{message.latency_ms ? ` · ${(message.latency_ms/1000).toFixed(1)}s` : ""}</div>}</article>;
 }

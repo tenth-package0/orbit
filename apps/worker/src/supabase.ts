@@ -7,7 +7,7 @@ function headers(env: Env, token: string) {
 
 export async function loadConversation(env: Env, token: string, conversationId: string, userMessageId: string): Promise<ChatMessage[]> {
   const url = new URL(`${env.SUPABASE_URL}/rest/v1/messages`);
-  url.searchParams.set("select", "id,role,content,conversation_id!inner(user_id)");
+  url.searchParams.set("select", "id,role,content");
   url.searchParams.set("conversation_id", `eq.${conversationId}`);
   url.searchParams.set("order", "created_at.asc");
   const response = await fetch(url, { headers: headers(env, token) });
@@ -27,4 +27,3 @@ export async function saveAssistant(env: Env, token: string, conversationId: str
   const rows = await response.json() as Array<{ id: string }>;
   return rows[0]!.id;
 }
-
