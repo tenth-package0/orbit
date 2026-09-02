@@ -43,7 +43,7 @@ describe("provider stream normalization", () => {
   it.each([
     ["OpenAI", openaiAdapter, ["input_image", "input_file", "hello"]],
     ["Anthropic", anthropicAdapter, ["image", "document", "hello"]],
-    ["Gemini", geminiAdapter, ["user_input", "document", "application/pdf", "hello"]]
+    ["Gemini", geminiAdapter, ["USER: Describe these", "document", "application/pdf", "hello"]]
   ])("sends attachments in the %s native format", async (_name, adapter, expected) => {
     const fetchMock = vi.fn().mockResolvedValue(response(adapter === geminiAdapter
       ? [JSON.stringify({ event_type: "interaction.completed", interaction: { status: "completed" } })]

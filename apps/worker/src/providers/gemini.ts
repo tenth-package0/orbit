@@ -4,15 +4,13 @@ import { parseSse, type ProviderAdapter } from "./provider";
 export const geminiAdapter: ProviderAdapter = {
   async *stream(request, apiKey) {
     const system = request.messages.filter((message) => message.role === "system").map((message) => message.content).join("\n\n") || undefined;
-    const input = request.messages.filter((message) => message.role !== "system").map((message) => ({
-      type: message.role === "assistant" ? "model_output" : "user_input",
-      content: [
-        ...(message.attachments ?? []).map((attachment) => attachment.mimeType === "text/plain"
-          ? { type: "text", text: `<attachment name="${attachment.fileName}">\n${decodeBase64Text(attachment.data)}\n</attachment>` }
-          : { type: attachment.mimeType === "application/pdf" ? "document" : "image", mime_type: attachment.mimeType, data: attachment.data }),
-        { type: "text", text: message.content }
-      ]
-    }));
+    // Interaction output steps carry Google-issued signatures, so Orbit's provider-neutral history is sent as a labeled transcript instead.
+    const input = request.messages.filter((message) => message.role !== "system").flatMap((message) => [
+      ...(message.attachments ?? []).map((attachment) => attachment.mimeType === "text/plain"
+        ? { type: "text", text: `<attachment name="${attachment.fileName}">\n${decodeBase64Text(attachment.data)}\n</attachment>` }
+        : { type: attachment.mimeType === "application/pdf" ? "document" : "image", mime_type: attachment.mimeType, data: attachment.data }),
+      { type: "text", text: `${message.role === "assistant" ? "ASSISTANT" : "USER"}: ${message.content}` }
+    ]);
     const url = "https://generativelanguage.googleapis.com/v1beta/interactions?alt=sse";
     const response = await fetch(url, {
       method: "POST",
