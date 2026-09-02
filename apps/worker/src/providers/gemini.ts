@@ -3,29 +3,33 @@ import { parseSse, type ProviderAdapter } from "./provider";
 
 export const geminiAdapter: ProviderAdapter = {
   async *stream(request, apiKey) {
-    const system = request.messages.filter((m) => m.role === "system").map((m) => ({ text: m.content }));
-    const contents = request.messages.filter((m) => m.role !== "system").map((message) => ({
-      role: message.role === "assistant" ? "model" : "user",
-      parts: [
+    const system = request.messages.filter((message) => message.role === "system").map((message) => message.content).join("\n\n") || undefined;
+    const input = request.messages.filter((message) => message.role !== "system").map((message) => ({
+      type: message.role === "assistant" ? "model_output" : "user_input",
+      content: [
         ...(message.attachments ?? []).map((attachment) => attachment.mimeType === "text/plain"
-          ? { text: `<attachment name="${attachment.fileName}">\n${decodeBase64Text(attachment.data)}\n</attachment>` }
-          : { inlineData: { mimeType: attachment.mimeType, data: attachment.data } }),
-        { text: message.content }
+          ? { type: "text", text: `<attachment name="${attachment.fileName}">\n${decodeBase64Text(attachment.data)}\n</attachment>` }
+          : { type: attachment.mimeType === "application/pdf" ? "document" : "image", mime_type: attachment.mimeType, data: attachment.data }),
+        { type: "text", text: message.content }
       ]
     }));
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(request.model)}:streamGenerateContent?alt=sse`;
+    const url = "https://generativelanguage.googleapis.com/v1beta/interactions?alt=sse";
     const response = await fetch(url, {
       method: "POST",
       headers: { "x-goog-api-key": apiKey, "content-type": "application/json" },
-      body: JSON.stringify({ contents, systemInstruction: system.length ? { parts: system } : undefined, generationConfig: { maxOutputTokens: request.maxOutputTokens } }),
+      body: JSON.stringify({ model: request.model, input, system_instruction: system, stream: true, store: false, generation_config: { max_output_tokens: request.maxOutputTokens } }),
       signal: request.signal
     });
     for await (const frame of parseSse(response)) {
+      if (frame.data === "[DONE]") continue;
       const event = JSON.parse(frame.data) as Record<string, any>;
-      const text = event.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text ?? "").join("");
-      if (text) yield { type: "text_delta", text };
-      if (event.usageMetadata) yield { type: "usage", inputTokens: event.usageMetadata.promptTokenCount, outputTokens: event.usageMetadata.candidatesTokenCount };
-      if (event.candidates?.[0]?.finishReason) yield { type: "complete", finishReason: (event.candidates[0].finishReason === "MAX_TOKENS" ? "length" : "stop") as FinishReason };
+      if (event.event_type === "step.delta" && event.delta?.type === "text" && event.delta.text) yield { type: "text_delta", text: event.delta.text };
+      if (event.event_type === "interaction.completed") {
+        const usage = event.interaction?.usage;
+        if (usage) yield { type: "usage", inputTokens: usage.total_input_tokens, outputTokens: usage.total_output_tokens };
+        const status = event.interaction?.status;
+        yield { type: "complete", finishReason: (status === "incomplete" || status === "budget_exceeded" ? "length" : "stop") as FinishReason };
+      }
     }
   }
 };

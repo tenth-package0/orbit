@@ -33,17 +33,20 @@ describe("provider stream normalization", () => {
   });
 
   it("normalizes Gemini deltas", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response([JSON.stringify({ candidates: [{ content: { parts: [{ text: "Hi" }] }, finishReason: "STOP" }], usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 1 } })])));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response([
+      JSON.stringify({ event_type: "step.delta", delta: { type: "text", text: "Hi" } }),
+      JSON.stringify({ event_type: "interaction.completed", interaction: { status: "completed", usage: { total_input_tokens: 2, total_output_tokens: 1 } } })
+    ])));
     expect(await collect(geminiAdapter)).toEqual([{ type: "text_delta", text: "Hi" }, { type: "usage", inputTokens: 2, outputTokens: 1 }, { type: "complete", finishReason: "stop" }]);
   });
 
   it.each([
     ["OpenAI", openaiAdapter, ["input_image", "input_file", "hello"]],
     ["Anthropic", anthropicAdapter, ["image", "document", "hello"]],
-    ["Gemini", geminiAdapter, ["inlineData", "application/pdf", "hello"]]
+    ["Gemini", geminiAdapter, ["user_input", "document", "application/pdf", "hello"]]
   ])("sends attachments in the %s native format", async (_name, adapter, expected) => {
     const fetchMock = vi.fn().mockResolvedValue(response(adapter === geminiAdapter
-      ? [JSON.stringify({ candidates: [{ content: { parts: [{ text: "ok" }] }, finishReason: "STOP" }] })]
+      ? [JSON.stringify({ event_type: "interaction.completed", interaction: { status: "completed" } })]
       : adapter === anthropicAdapter
         ? [JSON.stringify({ type: "message_delta", delta: { stop_reason: "end_turn" }, usage: {} })]
         : [JSON.stringify({ type: "response.completed", response: {} })]));
@@ -51,5 +54,6 @@ describe("provider stream normalization", () => {
     for await (const _event of adapter.stream(multimodalRequest, "secret")) { /* consume */ }
     const body = String(fetchMock.mock.calls[0]![1]!.body);
     for (const marker of expected) expect(body).toContain(marker);
+    if (adapter === geminiAdapter) expect(String(fetchMock.mock.calls[0]![0])).toContain("/v1beta/interactions");
   });
 });
