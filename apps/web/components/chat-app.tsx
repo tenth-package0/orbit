@@ -29,6 +29,8 @@ export function ChatApp({ email }: { email: string }) {
     if (!textarea) return;
     textarea.style.height = "0px";
     textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
+    const pane = messagesPane.current;
+    if (pane && nearBottom.current) requestAnimationFrame(() => pane.scrollTo({ top: pane.scrollHeight, behavior: "auto" }));
   }, [draft]);
   useEffect(() => {
     const pane = messagesPane.current;
