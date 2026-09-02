@@ -6,6 +6,7 @@ coverage/
 .env
 .env.local
 .vercel/
+supabase/.temp/
 *.tsbuildinfo
 .DS_Store
 
