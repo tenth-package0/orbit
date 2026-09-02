@@ -24,10 +24,12 @@ function cors(request: Request, env: Env) {
   return env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).includes(origin) ? origin : null;
 }
 
-async function rateLimit(env: Env, userId: string, ip: string, units: number) {
+export async function rateLimit(env: Env, userId: string, ip: string, units: number) {
+  // Burst protection counts interactions; provider and IP budgets count every model call in a comparison.
+  if (!(await env.USER_BURST.limit({ key: userId })).success) return false;
   for (let i = 0; i < units; i++) {
-    const [minute, burst, address] = await Promise.all([env.USER_MINUTE.limit({ key: userId }), env.USER_BURST.limit({ key: userId }), env.IP_MINUTE.limit({ key: ip })]);
-    if (!minute.success || !burst.success || !address.success) return false;
+    const [minute, address] = await Promise.all([env.USER_MINUTE.limit({ key: userId }), env.IP_MINUTE.limit({ key: ip })]);
+    if (!minute.success || !address.success) return false;
   }
   return true;
 }
