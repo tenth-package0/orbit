@@ -6,7 +6,7 @@ Orbit is an open-source chat interface for using and comparing OpenAI, Anthropic
 
 ```mermaid
 flowchart LR
-  Browser[Next.js browser app] -->|Auth and user-owned CRUD| Supabase[Supabase Auth + PostgreSQL]
+  Browser[Next.js browser app] -->|Auth, chat CRUD, private uploads| Supabase[Supabase Auth + PostgreSQL + Storage]
   Browser -->|Bearer JWT + generation request| Worker[Cloudflare Worker]
   Worker -->|Verify JWT / RLS queries| Supabase
   Worker -->|Fixed allowlist| OpenAI
@@ -18,7 +18,7 @@ flowchart LR
   Worker -->|Normalized SSE| Browser
 ```
 
-The browser never receives provider credentials. Conversation data is accessed with the caller's Supabase token and protected by Row Level Security. The Worker verifies the JWT, validates the request, applies user and IP rate limits, selects an allowlisted model, normalizes provider streaming, and persists completed assistant messages.
+The browser never receives provider credentials. Conversation data and private attachments are accessed with the caller's Supabase token and protected by Row Level Security. The Worker verifies the JWT, validates the request, applies user and IP rate limits, selects an allowlisted model, transforms attachments into each provider's native multimodal format, normalizes provider streaming, and persists completed assistant messages.
 
 ## Supported models
 
@@ -36,7 +36,7 @@ The snapshot is updated through a reviewed code change, not runtime scraping. Se
 
 ## Data model
 
-`conversations` belong to `auth.users`; `messages` belong to conversations. RLS policies verify ownership for every operation. No profile, analytics, quota, or raw-provider-response tables are used.
+`conversations` belong to `auth.users`; `messages` belong to conversations; `message_attachments` belong to user messages. Files live in the private `message-attachments` Storage bucket. RLS policies verify ownership for every database and object operation. No profile, analytics, quota, or raw-provider-response tables are used.
 
 ## Security model
 
@@ -45,6 +45,8 @@ The snapshot is updated through a reviewed code change, not runtime scraping. Se
 - Model IDs and provider URLs are server-owned allowlists.
 - Supabase JWTs are verified against project JWKS with issuer and audience checks.
 - Database writes use the caller's token and remain subject to RLS.
+- Attachments are private, use owner-prefixed object paths, and are limited to PNG, JPEG, WebP, PDF, or plain text. Each file is capped at 10 MB, with five files and 20 MB total per message.
+- The most recent attachment set is provided natively to every selected model and retained for follow-up prompts; older sets remain identified by filename in the text history.
 - Request bodies are capped at 256 KiB and schema validated.
 - CORS uses an exact origin allowlist.
 - Markdown output is rendered with raw HTML disabled.
