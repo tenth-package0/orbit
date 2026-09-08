@@ -27,7 +27,8 @@
 
 Most multi-model interfaces make the user choose a provider before they know which model fits the task. Orbit treats model selection as a product and systems problem:
 
-- **Auto** classifies each prompt as coding, math, reasoning, long-context, or general, then selects the strongest model from a versioned benchmark snapshot.
+
+- **Auto mode** classifies each prompt as coding, math, reasoning, long-context, or general, then selects the strongest model from a versioned benchmark snapshot.
 - **Manual mode** lets the user hold GPT, Claude, or Gemini for as long as they want.
 - **Compare** streams all three answers side by side for deliberate evaluation.
 - **Context follows the conversation** when the selected provider changes.
