@@ -11,7 +11,7 @@
     ·
     <a href="#how-auto-routing-works">How routing works</a>
     ·
-    <a href="#run-locally">Run locally</a>
+    <a href="#run-locally">Run locally</a> 
   </p>
   <p>
     <img alt="Next.js" src="https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs" />
