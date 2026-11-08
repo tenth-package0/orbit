@@ -14,21 +14,29 @@ export async function* parseSse(response: Response): AsyncIterable<{ event?: str
   if (!response.ok || !response.body) throw new ProviderHttpError(response.status);
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
   let buffer = "";
+  const parseFrame = (frame: string) => {
+    let event: string | undefined;
+    const data: string[] = [];
+    for (const line of frame.split(/\r?\n/)) {
+      if (line.startsWith("event:")) event = line.slice(6).trim();
+      if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
+    }
+    return data.length ? { event, data: data.join("\n") } : undefined;
+  };
   while (true) {
     const { value, done } = await reader.read();
     buffer += value ?? "";
     const frames = buffer.split(/\r?\n\r?\n/);
     buffer = frames.pop() ?? "";
     for (const frame of frames) {
-      let event: string | undefined;
-      const data: string[] = [];
-      for (const line of frame.split(/\r?\n/)) {
-        if (line.startsWith("event:")) event = line.slice(6).trim();
-        if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
-      }
-      if (data.length) yield { event, data: data.join("\n") };
+      const parsed = parseFrame(frame);
+      if (parsed) yield parsed;
     }
-    if (done) break;
+    if (done) {
+      const parsed = parseFrame(buffer);
+      if (parsed) yield parsed;
+      break;
+    }
   }
 }
 

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { anthropicAdapter } from "../src/providers/anthropic";
 import { geminiAdapter } from "../src/providers/gemini";
 import { openaiAdapter } from "../src/providers/openai";
+import { parseSse } from "../src/providers/provider";
 
 const request = { model: "test", messages: [{ role: "user" as const, content: "Hello" }], maxOutputTokens: 100, signal: new AbortController().signal };
 const multimodalRequest = { ...request, messages: [{ role: "user" as const, content: "Describe these", attachments: [
@@ -15,6 +16,12 @@ async function collect(adapter: typeof openaiAdapter) { const events = []; for a
 afterEach(() => vi.unstubAllGlobals());
 
 describe("provider stream normalization", () => {
+  it("parses a final provider event without a trailing blank line", async () => {
+    const events = [];
+    for await (const event of parseSse(new Response('event: message\ndata: {"text":"last"}'))) events.push(event);
+    expect(events).toEqual([{ event: "message", data: '{"text":"last"}' }]);
+  });
+
   it("normalizes OpenAI deltas and usage", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response([
       JSON.stringify({ type: "response.output_text.delta", delta: "Hi" }),
