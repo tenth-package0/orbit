@@ -1,7 +1,11 @@
 import type { OrbitStreamEvent } from "@orbit/contracts";
 
 export async function readOrbitStream(response: Response, onEvent: (event: OrbitStreamEvent) => void) {
-  if (!response.ok) throw new Error((await response.json()).error?.message ?? "Generation failed");
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const message = body?.error?.message;
+    throw new Error(typeof message === "string" && message ? message : `Generation failed (HTTP ${response.status})`);
+  }
   if (!response.body) throw new Error("Response stream is unavailable");
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
   let buffer = "";

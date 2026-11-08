@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { readOrbitStream } from "../lib/stream";
 
 describe("Orbit stream client", () => {
+  it("reports the HTTP status when an upstream error is not JSON", async () => {
+    await expect(readOrbitStream(new Response("Bad gateway", { status: 502 }), () => {}))
+      .rejects.toThrow("Generation failed (HTTP 502)");
+  });
+
   it("parses events split across chunks", async () => {
     const payload = 'data: {"type":"text_delta","generationId":"1","delta":"Hi"}\n\n';
     const body = new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode(payload.slice(0, 20))); controller.enqueue(new TextEncoder().encode(payload.slice(20))); controller.close(); } });
