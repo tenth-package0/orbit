@@ -9,5 +9,15 @@ describe("Orbit stream client", () => {
     await readOrbitStream(new Response(body), (event) => events.push(event));
     expect(events).toEqual([{ type: "text_delta", generationId: "1", delta: "Hi" }]);
   });
+
+  it("delivers the final event when the stream closes without a blank line", async () => {
+    const body = new ReadableStream({ start(controller) {
+      controller.enqueue(new TextEncoder().encode('data: {"type":"text_delta","generationId":"1","delta":"last"}'));
+      controller.close();
+    } });
+    const events: unknown[] = [];
+    await readOrbitStream(new Response(body), (event) => events.push(event));
+    expect(events).toEqual([{ type: "text_delta", generationId: "1", delta: "last" }]);
+  });
 });
 
