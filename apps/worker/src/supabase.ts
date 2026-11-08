@@ -15,8 +15,13 @@ export async function loadConversation(env: Env, token: string, conversationId: 
   const rows = await response.json() as Array<{ id: string; role: "user" | "assistant"; content: string }>;
   const targetIndex = rows.findIndex((row) => row.id === userMessageId && row.role === "user");
   if (targetIndex < 0) throw new Error("FORBIDDEN");
+  const contextRows = rows.slice(Math.max(0, targetIndex - 49), targetIndex + 1);
+  if (contextRows.some((row) => row.content.length > 20_000) ||
+      contextRows.reduce((total, row) => total + row.content.length, 0) > 100_000) {
+    throw new Error("PAYLOAD_TOO_LARGE");
+  }
 
-  const messageIds = rows.slice(0, targetIndex + 1).map((row) => row.id);
+  const messageIds = contextRows.map((row) => row.id);
   const attachmentsUrl = new URL(`${env.SUPABASE_URL}/rest/v1/message_attachments`);
   attachmentsUrl.searchParams.set("select", "id,message_id,file_name,mime_type,size_bytes,storage_path");
   attachmentsUrl.searchParams.set("message_id", `in.(${messageIds.join(",")})`);
@@ -26,7 +31,7 @@ export async function loadConversation(env: Env, token: string, conversationId: 
   const metadata = await attachmentsResponse.json() as Array<{ id: string; message_id: string; file_name: string; mime_type: ChatAttachment["mimeType"]; size_bytes: number; storage_path: string }>;
   const grouped = new Map<string, typeof metadata>();
   for (const attachment of metadata) grouped.set(attachment.message_id, [...(grouped.get(attachment.message_id) ?? []), attachment]);
-  const activeAttachmentMessage = [...rows.slice(0, targetIndex + 1)].reverse().find((row) => row.role === "user" && grouped.has(row.id));
+  const activeAttachmentMessage = [...contextRows].reverse().find((row) => row.role === "user" && grouped.has(row.id));
   const activeMetadata = activeAttachmentMessage ? grouped.get(activeAttachmentMessage.id) ?? [] : [];
   if (activeMetadata.reduce((total, item) => total + item.size_bytes, 0) > 20 * 1024 * 1024) throw new Error("PAYLOAD_TOO_LARGE");
   const activeAttachments = new Map<string, ChatAttachment[]>();
@@ -40,7 +45,7 @@ export async function loadConversation(env: Env, token: string, conversationId: 
     activeAttachments.set(activeAttachmentMessage.id, downloaded);
   }
 
-  return rows.slice(0, targetIndex + 1).map(({ id, role, content }) => {
+  return contextRows.map(({ id, role, content }) => {
     const names = grouped.get(id)?.map((item) => item.file_name) ?? [];
     const annotated = names.length && !activeAttachments.has(id) ? `${content}\n\n[Earlier attachments: ${names.join(", ")}]` : content;
     return { role, content: annotated, attachments: activeAttachments.get(id) };
