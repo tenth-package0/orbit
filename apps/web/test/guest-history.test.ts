@@ -49,6 +49,20 @@ describe("guest chat state", () => {
     expect(saved.conversations[0].messages).toEqual([{ id: "u0", role: "user", content: "Hello" }]);
   });
 
+  it("trims old messages when one conversation exceeds the storage budget", () => {
+    const local = storage();
+    vi.stubGlobal("localStorage", local);
+    const messages = Array.from({ length: 100 }, (_, index) => ({
+      id: `u${index}`, role: "user" as const, content: "x".repeat(10_000)
+    }));
+    writeGuestHistory([{ id: "c1", title: "Large chat", updatedAt: 1, messages }], "c1");
+    const payload = local.setItem.mock.calls[0]![1];
+    const saved = JSON.parse(payload);
+    expect(payload.length).toBeLessThanOrEqual(750_000);
+    expect(saved.conversations[0].messages.length).toBeLessThan(100);
+    expect(saved.conversations[0].messages.at(-1).id).toBe("u99");
+  });
+
   it("loads valid history and ignores corrupt storage", () => {
     const local = storage({
       "orbit.guest-history.v1": JSON.stringify({ version: 1, activeId: "c1", conversations: [{ id: "c1", title: "Chat", updatedAt: 1, messages: [] }] })

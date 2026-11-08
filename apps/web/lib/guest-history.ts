@@ -63,6 +63,11 @@ export function writeGuestHistory(conversations: GuestConversation[], activeId?:
   }));
   let payload = JSON.stringify({ version: 1, activeId, conversations: safe });
   while (payload.length > 750_000 && safe.length > 1) { safe.pop(); payload = JSON.stringify({ version: 1, activeId, conversations: safe }); }
+  while (payload.length > 750_000 && safe.length > 0 && safe[0]!.messages.length > 1) {
+    safe[0]!.messages.shift();
+    payload = JSON.stringify({ version: 1, activeId, conversations: safe });
+  }
+  if (payload.length > 750_000) return;
   try { localStorage.setItem(guestHistoryKey, payload); } catch { /* The active chat remains usable when browser storage is unavailable. */ }
 }
 
