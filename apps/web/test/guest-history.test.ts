@@ -59,6 +59,23 @@ describe("guest chat state", () => {
     expect(readGuestHistory()).toEqual({ conversations: [] });
   });
 
+  it("drops malformed saved conversations before they reach the chat UI", () => {
+    const local = storage({
+      "orbit.guest-history.v1": JSON.stringify({
+        version: 1,
+        activeId: "broken",
+        conversations: [
+          { id: "broken", title: null, updatedAt: 1, messages: [] },
+          { id: "valid", title: "Chat", updatedAt: 2, messages: [{ id: "u1", role: "user", content: "Hello" }] }
+        ]
+      })
+    });
+    vi.stubGlobal("localStorage", local);
+    expect(readGuestHistory()).toEqual({ activeId: undefined, conversations: [
+      { id: "valid", title: "Chat", updatedAt: 2, messages: [{ id: "u1", role: "user", content: "Hello" }] }
+    ] });
+  });
+
   it("keeps guest sending available when browser storage is blocked", () => {
     vi.stubGlobal("localStorage", { getItem: () => { throw new Error("blocked"); }, setItem: vi.fn() });
     vi.stubGlobal("crypto", { randomUUID: () => "temporary-session" });
