@@ -93,20 +93,25 @@ export async function handleRequest(request: Request, env: Env, authorizeRequest
         const generationId = crypto.randomUUID();
         const started = Date.now();
         let content = "";
+        let completed = false;
         let usage: { inputTokens?: number; outputTokens?: number } = {};
         await writer.write(sse({ type: "start", requestId, generationId, provider: model.provider, model: model.id, comparisonGroupId, routing }));
         try {
           for await (const event of adapters[model.provider].stream({ model: model.id, messages: conversationMessages, maxOutputTokens: Math.min(model.maxOutputTokens, 8192), signal: request.signal }, providerKey(env, model.provider))) {
             if (event.type === "text_delta") { content += event.text; await writer.write(sse({ type: "text_delta", generationId, delta: event.text })); }
             if (event.type === "usage") usage = { inputTokens: event.inputTokens, outputTokens: event.outputTokens };
-            if (event.type === "complete") {
+            if (event.type === "complete" && !completed) {
               const latencyMs = Date.now() - started;
               const messageId = context.kind === "authenticated"
                 ? await saveAssistant(env, context.token, conversationId!, model, content, latencyMs, usage, comparisonGroupId)
                 : crypto.randomUUID();
               await writer.write(sse({ type: "metadata", generationId, latencyMs, ...usage }));
               await writer.write(sse({ type: "complete", generationId, finishReason: event.finishReason, messageId }));
+              completed = true;
             }
+          }
+          if (!completed) {
+            await writer.write(sse({ type: "error", generationId, error: publicError("STREAM_INTERRUPTED", requestId, true) }));
           }
         } catch (error) {
           const code = error instanceof ProviderHttpError && error.status === 429 ? "PROVIDER_RATE_LIMITED" : error instanceof DOMException && error.name === "AbortError" ? "CANCELLED" : "PROVIDER_UNAVAILABLE";

@@ -37,6 +37,15 @@ describe("generation contexts", () => {
     expect(fetchMock.mock.calls.every(([input]) => !urlOf(input).includes("supabase.co"))).toBe(true);
   });
 
+  it("reports an interrupted provider stream instead of silently ending", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response('data: {"type":"response.output_text.delta","delta":"partial"}\n\n')));
+    const response = await worker.fetch(request(guestBody()), env());
+    const body = await response.text();
+    expect(body).toContain('"type":"text_delta"');
+    expect(body).toContain('"code":"STREAM_INTERRUPTED"');
+    expect(body).not.toContain('"type":"complete"');
+  });
+
   it("rejects unknown models for guests before calling a provider", async () => {
     const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock);
     const response = await worker.fetch(request(guestBody({ mode: "model", modelKey: "unknown" })), env());
